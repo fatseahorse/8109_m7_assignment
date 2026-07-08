@@ -51,24 +51,44 @@ app.get('/', function (req, res) {
 
 app.get('/customers', async function (req, res) {
 
+    const firstName = req.query.first_name;
+    const lastName = req.query.last_name;
+    const email = req.query.email;
 
-    const sql = `
+    let sql = `
         SELECT * FROM Customers
             JOIN Companies ON
                 Customers.company_id = Companies.company_id
-        ORDER BY Customers.first_name, Customers.last_name
-        `
-    // connection.query takes in the SQL statement as parameter
-    // and returns an array of two elements
-    // index 0 is the results
-    // index 1 is some metadata
-    const [customers] = await connection.execute({
+        WHERE 1
+    `
+
+    const bindings = [];
+
+    if (firstName) {
+        sql += ' AND first_name LIKE ?';
+        bindings.push('%' + firstName + '%');
+    }
+
+    if (lastName) {
+        sql += ' AND last_name LIKE ?';
+        bindings.push('%' + lastName + '%');
+    }
+
+    if (email) {
+        sql += ' AND email LIKE ?';
+        bindings.push('%' + email + '%');
+    }
+
+    sql += ' ORDER BY Customers.first_name, Customers.last_name';
+
+    const [customers] = await connection.query({
         "sql": sql,
         "nestTables": true
-    });
+    }, bindings);
 
     res.render('customers/index', {
-        customers: customers
+        customers: customers,
+        searchParams: req.query
     })
 })
 
@@ -137,6 +157,114 @@ app.post('/customers/create', async function (req, res) {
     res.redirect('/customers')
 })
 
+
+// one route to display the edit form
+app.get('/customers/:customer_id/update', async function (req, res) {
+    // use a prepared statement to query the database
+    const [customers] = await connection.execute(
+        "SELECT * FROM Customers where customer_id = ?", [req.params.customer_id]);
+
+    // connection.execute will return an array if we do a SELECT
+    // so if we only want the first result, we need to get from index 0.
+    const customer = customers[0];
+
+    const [companies] = await connection.execute("SELECT * FROM Companies");
+    const [employees] = await connection.execute("SELECT * FROM Employees");
+    const [products] = await connection.execute("SELECT * FROM Products");
+    const [selectedProductResults] = await connection.execute(
+        "SELECT * FROM CustomerProduct WHERE customer_id = ?", [req.params.customer_id])
+    // for each element in selectedProductResults, we want a new array
+    // that only consists of the product_id
+    const selectedProducts = selectedProductResults.map(function (p) {
+        return p.product_id;
+    })
+    console.log(selectedProducts);
+
+    res.render('customers/edit', {
+        customer, companies, employees, products, selectedProducts
+    })
+})
+
+
+// one route to process the form
+app.post('/customers/:customer_id/update', async function (req, res) {
+
+    const conn = await connection.getConnection();
+    try {
+        await conn.beginTransaction();
+        const { first_name, last_name, email, company_id, employee_id } = req.body;
+
+        const sql = `UPDATE Customers SET
+                        first_name = ?,
+                        last_name = ?,
+                        email = ?,
+                        company_id = ?,
+                        employee_id = ?
+                   WHERE customer_id = ?
+                  `;
+
+        await connection.execute(sql, [first_name, last_name, email, company_id, employee_id, req.params.customer_id]);
+
+        // update the products
+
+        // 1. delete all the existing product relationships
+        await conn.execute("DELETE FROM CustomerProduct WHERE customer_id = ?", [req.params.customer_id]);
+
+        // 2. re-add all the product relationships from the form
+        for (let p of req.body.products) {
+            await conn.execute(`INSERT INTO CustomerProduct (customer_id, product_id) VALUES (?, ?)`,
+                [req.params.customer_id, p]
+            )
+        }
+
+        await conn.commit();
+    } catch (e) {
+        await conn.rollback();
+    } finally {
+        await conn.release();
+    }
+
+    res.redirect('/customers')
+})
+
+
+// confirm with the user if they want to delete
+app.get('/customers/:customer_id/delete', async function (req, res) {
+    // use a prepared statement to query the database
+    const [customers] = await connection.execute(
+        "SELECT * FROM Customers where customer_id = ?", [req.params.customer_id]);
+
+    // connection.execute will return an array if we do a SELECT
+    // so if we only want the first result, we need to get from index 0.
+    const customer = customers[0];
+
+    res.render('customers/delete', {
+        customer
+    })
+})
+
+
+// process the delete
+app.post('/customers/:customer_id/delete', async function (req, res) {
+    const conn = await connection.getConnection();
+
+    try {
+        await conn.beginTransaction();
+
+        await connection.execute("DELETE FROM CustomerProduct WHERE customer_id = ?", [req.params.customer_id])
+
+        const sql = `DELETE FROM Customers WHERE customer_id = ?`;
+        await connection.execute(sql, [req.params.customer_id]);
+
+        await conn.commit();
+    } catch (e) {
+        await conn.rollback();
+    } finally {
+        await conn.release();
+    }
+
+    res.redirect('/customers')
+})
 
 
 

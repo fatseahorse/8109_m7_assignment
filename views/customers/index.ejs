@@ -6,6 +6,24 @@ All Customers
 <div>
     <a  class="btn btn-primary" href="/customers/create">Create</a>
 </div>
+
+<h2>Search</h2>
+<form method="GET">
+    <div>
+        <label>First Name</label>
+        <input type="text" name="first_name" class="form-control" value="<%= searchParams?.first_name || '' %>" />
+    </div>
+    <div>
+        <label>Last Name</label>
+        <input type="text" name="last_name" class="form-control" value="<%= searchParams?.last_name || '' %>" />
+    </div>
+    <div>
+        <label>Email</label>
+        <input type="text" name="email" class="form-control" value="<%= searchParams?.email || '' %>" />
+    </div>
+    <input type="submit" value="Search" class="btn btn-primary btn-sm mt-3 mb-3" />
+</form>
+
 <table class="table">
     <thead>
         <tr>
@@ -19,14 +37,26 @@ All Customers
     <tbody>
         <% for (let c of customers) { %>
             <tr>
-                <td><%= c.Customers.first_name %></td>
-                <td><%= c.Customers.last_name %></td>
-                <td><%= c.Customers.email %></td>
-                <td><%= c.Companies.name %></td>
                 <td>
-                    <a class="btn btn-primary btn-sm" href="/customers/<%= c.Customers.customer_id %>/update">Update</a>
+                    <%= c.Customers.first_name %>
+                </td>
+                <td>
+                    <%= c.Customers.last_name %>
+                </td>
+                <td>
+                    <%= c.Customers.email %>
+                </td>
+                <td>
+                    <%= c.Companies.name %>
+                </td>
+                <td>
+                    <a class="btn btn-primary btn-sm"
+                        href="/customers/<%= c.Customers.customer_id %>/update"
+                    >Update</a>
 
-                    <a class="btn btn-danger btn-sm" href="/customers/<%= c.Customers.customer_id %>/delete">Delete</a>
+                    <a class="btn btn-danger btn-sm" href="/customers/<%= c.Customers.customer_id %>/delete">
+                        Delete
+                    </a>
                 </td>
             </tr>
         <% } %>
